@@ -1,4 +1,5 @@
 from . import core
+import numpy as np
 
 # check shape match with broadcasting aware
 # only allow the first dimension to be different
@@ -16,5 +17,8 @@ def check_shape_exact_match(x, y):
     if x.data().shape != y.data().shape:
         raise core.ShapeNotMatchError('Not exact match: {}, {}'.format(x.data().shape,\
                                                                        y.data().shape))
+
+def sigmoid(x):
+    return 1. / (1. + np.exp(x))
 
 
