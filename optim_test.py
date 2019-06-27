@@ -30,21 +30,16 @@ def make_test_graph():
 if __name__ == '__main__':
     x, w, b, y_label, loss, loss_reg = make_test_graph()
     print('-' * 100)
-    print('Test training')
-    lr = 0.001
-    loss_reg = dg.graph.subgraph(loss_reg, 'prev')
-    for i in range(1000):
-        for n in dg.forward_iter(loss_reg):
-            n.clear_grad()
-            n.forward()
-        loss_reg.set_grad(loss_reg.grad() + 1)
-        for n in dg.backward_iter(loss_reg):
-            n.backward()
-        w.set_data(w.data() - lr * w.grad())
-        b.set_data(b.data() - lr * b.grad())
-        if i % 100 == 0:
-            print('Regularized loss after training {} times: {}'.format(i+1, loss.data()))
+    print('Test optim')
+    sgd_optim = dg.optim.SGD(loss_reg, [w, b], lr = 0.001)
+    x_data = np.arange(4).reshape([2,2,1]).astype(np.float)
+    y_data = np.arange(6).reshape([2,3,1]).astype(np.float)
 
+    for i in range(1000):
+        sgd_optim.step({x:x_data, y_label:y_data})
+        if i % 100 == 0:
+            print('Regularized loss after training {} times: {}'.format(i+1, loss_reg.data()))
+            
     print('Final values of w and b')
     print('w.data()')
     print(w.data())
