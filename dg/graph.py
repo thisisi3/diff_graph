@@ -1,14 +1,13 @@
 
 # a node in a graph that has next and prev direction
 class Node:
-    def __init__(self, body = None, name = 'NA'):
+    def __init__(self, name = 'Node'):
         self.next = []
         self.prev = []
-        self.body = body
         self.name = name
 
     def copy(self):
-        return Node(name = self.name, body = self.body)
+        return Node(name = self.name)
         
     def to_str(self):
         return '\t'.join([self.name,
@@ -55,7 +54,7 @@ def double_connect(root):
 # return a new graph which is a subgraph starting from node along
 # a speficied direction
 def subgraph(node, direction = 'next'):
-    new_root = Node(name = node.name, body = node.body)
+    new_root = node.copy()
     copied = {node : new_root}
     for cur_node in bfs_iter(node, direction):
         cur_node_copy = copied[cur_node]
@@ -63,7 +62,7 @@ def subgraph(node, direction = 'next'):
             if next_node in copied:
                 cur_node_copy.next.append(copied[next_node])
             else:
-                new_copy_node = Node(name = next_node.name, body = next_node.body)
+                new_copy_node = next_node.copy()
                 cur_node_copy.next.append(new_copy_node)
                 copied[next_node] = new_copy_node
     return double_connect(new_root)
