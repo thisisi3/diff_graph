@@ -32,7 +32,7 @@ class Tensor:
 
 class Operator:
     def __init__(self, name = 'Op'):
-        # inputs are a list of Operators while output is just one Tensor
+        # inputs is a list of Operators while output is just one Tensor
         self.inputs = []
         self.output = None
 

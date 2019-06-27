@@ -6,6 +6,10 @@ class Node:
         self.prev = []
         self.body = body
         self.name = name
+
+    def copy(self):
+        return Node(name = self.name, body = self.body)
+        
     def to_str(self):
         return '\t'.join([self.name,
                           ','.join([n.name for n in self.next]), 
@@ -62,7 +66,7 @@ def subgraph(node, direction = 'next'):
                 new_copy_node = Node(name = next_node.name, body = next_node.body)
                 cur_node_copy.next.append(new_copy_node)
                 copied[next_node] = new_copy_node
-    return new_root
+    return double_connect(new_root)
 
 
 def print_graph(root):
@@ -79,17 +83,17 @@ def all_visited(nlist, visited):
         if n not in visited:
             return False
     return True
-def dfs_prop_iter_helper(node, visited, attr_next = 'next', attr_prev = 'prev'):
+def bfs_prop_iter_helper(node, visited, attr_next = 'next', attr_prev = 'prev'):
     if all_visited(getattr(node, attr_prev), visited):
         if node not in visited:
             yield node
             visited.add(node)
         for i in getattr(node, attr_next):
-            for j in dfs_prop_iter_helper(i, visited, attr_next, attr_prev):
+            for j in bfs_prop_iter_helper(i, visited, attr_next, attr_prev):
                 yield j
-def dfs_prop_iter(root, attr_next = 'next', attr_prev = 'prev'):
+def bfs_prop_iter(root, attr_next = 'next', attr_prev = 'prev'):
     visited = set()
-    for n in dfs_prop_iter_helper(root, visited, attr_next, attr_prev):
+    for n in bfs_prop_iter_helper(root, visited, attr_next, attr_prev):
         yield n
 
 
