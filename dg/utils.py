@@ -31,3 +31,4 @@ def softmax(x):
 # is there a more optimized way?
 def batch_softmax(x):
     return np.array([softmax(x) for m in x])
+

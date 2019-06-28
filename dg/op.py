@@ -174,6 +174,7 @@ class SigmoidOp(Operator):
         self.in_op.output.grad += self.grad() * (1 - self.data()) * self.data()
         
 
+
 class ReluOp(Operator):
     def __init__(self, in_op, name = 'ReluOp'):
         super(ReluOp, self).__init__(name = name)
@@ -201,6 +202,12 @@ class SoftmaxCrossEntropyOp(Operator):
         super(SoftmaxCrossEntropyOp, self).__init__(name = name)
         self.in_op
 
+    def forward(self):
+        self.set_data(np.maximum(self.in_op.data(), 0))
+
+    def backward(self):
+        self.in_op.output.grad += self.data().astype(np.bool).astype(np.int) * self.grad()
+        
 
 # data entry operator
 class EntryOp(Operator):
