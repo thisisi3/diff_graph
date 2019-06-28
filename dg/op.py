@@ -159,6 +159,49 @@ class L2Op(Operator):
         self.in_op.output.grad += self.in_op.data() * 2 / self.in_op.data().size \
                                   * out_grad * self.reg
 
+
+class SigmoidOp(Operator):
+    def __init__(self, in_op, name = 'SigmoidOp'):
+        super(SigmoidOp, self).__init__(name = name)
+        self.in_op = in_op
+        self.inputs = [in_op]
+        self.output = Tensor(utils.sigmoid(in_op.data()))
+        
+    def forward(self):
+        self.set_data(utils.sigmoid(self.in_op.data()))
+        
+    def backward(self):
+        self.in_op.output.grad += self.grad() * (1 - self.data()) * self.data()
+        
+
+class ReluOp(Operator):
+    def __init__(self, in_op, name = 'ReluOp'):
+        super(ReluOp, self).__init__(name = name)
+        self.in_op = in_op
+        self.inputs = [in_op]
+        self.output = Tensor(np.maximum(in_op.data(), 0))
+        
+    def forward(self):
+        self.set_data(np.maximum(self.in_op.data(), 0))
+        
+    def backward(self):
+        self.in_op.output.grad += self.data().astype(np.bool).astype(np.int) * self.grad()
+
+class SoftmaxOp(Operator):
+    def __init__(self, in_op, name = 'SoftmaxOp'):
+        super(SoftmaxOp, self).__init__(name = name)
+        self.in_op = in_op
+        self.inputs = [in_op]
+        out_tsr = np.array([utils.softmax(m) for m in self.in_op.data()])
+        self.output = Tensor(out_tsr)
+
+
+class SoftmaxCrossEntropyOp(Operator):
+    def __init__(self, in_op, name = 'SoftmaxCrossEntropyOp'):
+        super(SoftmaxCrossEntropyOp, self).__init__(name = name)
+        self.in_op
+
+
 # data entry operator
 class EntryOp(Operator):
     def __init__(self, np_tsr, name = 'EntryOp'):
@@ -246,3 +289,16 @@ def identity(np_tsr, name = 'data_entry'):
     node = OperatorNode(name = name, op = op)
     return node
 
+def sigmoid(in_node, name = 'sigmoid'):
+    op = SigmoidOp(in_node.op, name = name)
+    node = OperatorNode(name = name, op = op)
+    node.prev.append(in_node)
+    in_node.next.append(node)
+    return node
+
+def relu(in_node, name = 'relu'):
+    op = ReluOp(in_node.op, name = name)
+    node = OperatorNode(name = name, op = op)
+    node.prev.append(in_node)
+    in_node.next.append(node)
+    return node
