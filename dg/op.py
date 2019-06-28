@@ -128,7 +128,8 @@ class MSEOp(Operator):
         self.set_data(self._calc_mse_tsr_())
 
     def _calc_mse_tsr_(self):
-        mse_val = np.sum((self.y_op.data() - self.ylabel_op.data())**2) / self.y_op.data().size
+        mse_val = np.sum((self.y_op.data() - self.ylabel_op.data())**2) \
+                  / self.y_op.data().size
         mse_tsr = np.array([mse_val])
         return mse_tsr
         
@@ -193,20 +194,36 @@ class SoftmaxOp(Operator):
         super(SoftmaxOp, self).__init__(name = name)
         self.in_op = in_op
         self.inputs = [in_op]
-        out_tsr = np.array([utils.softmax(m) for m in self.in_op.data()])
-        self.output = Tensor(out_tsr)
-
-
-class SoftmaxCrossEntropyOp(Operator):
-    def __init__(self, in_op, name = 'SoftmaxCrossEntropyOp'):
-        super(SoftmaxCrossEntropyOp, self).__init__(name = name)
-        self.in_op
+        self.output = Tensor(utils.batch_softmax(self.in_op.data()))
 
     def forward(self):
-        self.set_data(np.maximum(self.in_op.data(), 0))
+        self.set_data(utils.batch_softmax(self.in_op.data()))
 
     def backward(self):
-        self.in_op.output.grad += self.data().astype(np.bool).astype(np.int) * self.grad()
+        raise NotImplementedError('Backward() in SoftmaxOp is not implemented')
+
+class SoftmaxCrossEntropyOp(Operator):
+    def __init__(self, in_op, ylabel, name = 'SoftmaxCrossEntropyOp'):
+        super(SoftmaxCrossEntropyOp, self).__init__(name = name)
+        self.in_op = in_op
+        self.ylabel = ylabel
+        self.inputs = [in_op]
+        self.output = Tensor(np.array([self._calc_soft_cross_()]))
+
+    def forward(self):
+        self.set_data(np.array([self._calc_soft_cross_()]))
+
+    # to-do: batch_softmax() was already caculated once in forward pass
+    # to-do: gradient w.r.t ylabel is not caculated
+    def backward(self):
+        self.in_op.output.grad \
+            += utils.batch_softmax(self.in_op.data()) - self.ylabel.data()
+
+    def _calc_soft_cross_(self):
+        cross = np.sum(utils.batch_soft_cross(
+            self.in_op.data(), self.ylabel.data()
+        )) / len(self.in_op.data())
+        return cross
         
 
 # data entry operator
@@ -274,14 +291,6 @@ def mat_add(a_node, b_node, name = 'MatAdd'):
     b_node.next.append(node)
     return node
 
-def mse(a_node, b_node, name = 'MSE'):
-    op = MSEOp(a_node.op, b_node.op, name = name)
-    node = OperatorNode(name = name, op = op)
-    node.prev += [a_node, b_node]
-    a_node.next.append(node)
-    b_node.next.append(node)
-    return node
-
 def l2(in_node, name = 'l2'):
     op = L2Op(in_node.op, name = name)
     node = OperatorNode(name = name, op = op)
@@ -309,3 +318,22 @@ def relu(in_node, name = 'relu'):
     node.prev.append(in_node)
     in_node.next.append(node)
     return node
+
+# mean squared error
+def mse(a_node, b_node, name = 'MSE'):
+    op = MSEOp(a_node.op, b_node.op, name = name)
+    node = OperatorNode(name = name, op = op)
+    node.prev += [a_node, b_node]
+    a_node.next.append(node)
+    b_node.next.append(node)
+    return node
+
+# cross entropy loss
+def softmax_cross(in_node, ylabel, name = 'soft_cross'):
+    op = SoftmaxCrossEntropyOp(in_node.op, ylabel.op, name = name)
+    node = OperatorNode(name = name, op = op)
+    node.prev += [in_node, ylabel]
+    in_node.next.append(node)
+    ylabel.next.append(node)
+    return node
+    

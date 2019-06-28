@@ -30,5 +30,13 @@ def softmax(x):
 # assume the first axis of x is batch size.
 # is there a more optimized way?
 def batch_softmax(x):
-    return np.array([softmax(x) for m in x])
+    return np.array([softmax(m) for m in x])
 
+
+def batch_soft_cross(x, label):
+    soft_tsr = batch_softmax(x)
+    sum_axis = tuple(range(soft_tsr.ndim))[1:]
+    soft_val = np.sum(soft_tsr * label, sum_axis)
+    return -np.log(soft_val)
+
+    
