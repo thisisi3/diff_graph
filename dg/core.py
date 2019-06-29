@@ -31,11 +31,21 @@ def backward_iter(root):
     for n in graph.bfs_prop_iter(root):
         yield n
                                         
-def forward_pass(root, feed_dict):
+def forward_pass(root, feed_dict, clear_grad = False):
     op_feed_dict = {a.op:b for a, b in feed_dict.items()}
     for n in forward_iter(graph.subgraph(root)):
         if n.op in op_feed_dict:
             n.set_data(op_feed_dict[n.op])
         else:
             n.forward()
+        if clear_grad:
+            n.clear_grad()
 
+def backward_pass(root, grad = None):
+    if grad is None:
+        root.set_grad_one()
+    else:
+        root.set_grad(grad)
+    for n in backward_iter(root):
+        n.backward()
+        

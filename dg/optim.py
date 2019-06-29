@@ -19,16 +19,8 @@ class SGD:
         self.lr = lr
 
     def step(self, feed_dict = {}):
-        op_feed_dict = {a.op : b  for a, b in feed_dict.items()}
-        for n in core.forward_iter(self.loss):
-            if n.op in op_feed_dict:
-                n.set_data(op_feed_dict[n.op])
-            else:
-                n.forward()
-            n.clear_grad()
-        self.loss.set_grad_one()
-        for n in core.backward_iter(self.loss):
-            n.backward()
+        core.forward_pass(self.loss, feed_dict, clear_grad = True)
+        core.backward_pass(self.loss)
         self.update_trainable()
 
     def update_trainable(self):
