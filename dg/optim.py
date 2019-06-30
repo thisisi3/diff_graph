@@ -14,7 +14,7 @@ class Optimizer:
 
 class SGD:
     def __init__(self, loss, trainable = [], lr = DEFAULT_LR):
-        self.loss = graph.subgraph(loss, 'prev')
+        self.loss = loss
         self.trainable = set(trainable)
         self.lr = lr
 

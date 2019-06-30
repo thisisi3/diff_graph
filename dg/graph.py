@@ -28,6 +28,7 @@ def dfs_iter(node, attr_next = 'next'):
     visited = set()
     for i in dfs_iter_helper(node, visited, attr_next):
         yield i
+
 # breath first search over a graph with a specified direction
 def bfs_iter(node, attr_next = 'next'):
     q = [node]
@@ -82,7 +83,8 @@ def all_visited(nlist, visited):
         if n not in visited:
             return False
     return True
-def bfs_prop_iter_helper(node, visited, attr_next = 'next', attr_prev = 'prev'):
+def bfs_prop_iter_helper(node, visited, attr_next = 'next', 
+                         attr_prev = 'prev'):
     if all_visited(getattr(node, attr_prev), visited):
         if node not in visited:
             yield node

@@ -32,7 +32,6 @@ if __name__ == '__main__':
     print('-' * 100)
     print('Test training')
     lr = 0.001
-    loss_reg = dg.graph.subgraph(loss_reg, 'prev')
     for i in range(1000):
         for n in dg.forward_iter(loss_reg):
             n.clear_grad()

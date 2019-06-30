@@ -6,6 +6,18 @@ DEFAULT_DTYPE = np.float
 class ShapeNotMatchError(Exception):
     pass
 
+
+# a differentiable graph is a directed graph that represents a chained 
+# computations, each node represents an operator that 
+#     has inputs which are other operators
+#     has an output
+#     the directions represents the data dependencies
+#     the operators/nodes are differentiable
+class DiffGraph:
+    pass
+
+
+# the main data form, also keeps its gradient value
 class Tensor:
     def __init__(self, tensor, name = 'tensor'):
         # both are numpy tensors with the same shape
@@ -19,21 +31,27 @@ class Tensor:
     def set_grad_one(self):
         self.grad = np.ones(self.data.shape, dtype = DEFAULT_DTYPE)
 
-
-# given a root whose gradients need to be backpropagated through the graph,
-# iterate over all the nodes along the forward pass
-def forward_iter(root):
-    for n in graph.dfs_iter(root):
+# Given a root whose gradients need to be backpropagated through the graph,
+# iterate over all the nodes along the forward pass.
+# Node is a node from the differentiable graph.
+# Notice here it first copied a subgraph rooted at node and along
+# the reverse direction, then iterator over the subgraph.
+# The reason is to only iterates over the subgraph, this is needed 
+# especially for backward pass.
+def forward_iter(node):
+    for n in graph.dfs_iter(graph.subgraph(node, 'prev')):
         yield n
 
 # iterate over all the nodes along the backward pass
-def backward_iter(root):
-    for n in graph.bfs_prop_iter(root):
+# node is a node from the differentiable graph
+def backward_iter(node):
+    for n in graph.bfs_prop_iter(graph.subgraph(node, 'prev')):
         yield n
-                                        
-def forward_pass(root, feed_dict, clear_grad = False):
+
+# feed data and forward pass over the subgraph rooted at node
+def forward_pass(node, feed_dict, clear_grad = False):
     op_feed_dict = {a.op:b for a, b in feed_dict.items()}
-    for n in forward_iter(graph.subgraph(root)):
+    for n in forward_iter(node):
         if n.op in op_feed_dict:
             n.set_data(op_feed_dict[n.op])
         else:
@@ -41,11 +59,13 @@ def forward_pass(root, feed_dict, clear_grad = False):
         if clear_grad:
             n.clear_grad()
 
-def backward_pass(root, grad = None):
+# backward pass over the subgraph rooted at node
+def backward_pass(node, grad = None):
     if grad is None:
-        root.set_grad_one()
+        node.set_grad_one()
     else:
-        root.set_grad(grad)
-    for n in backward_iter(root):
+        node.set_grad(grad)
+    for n in backward_iter(node):
         n.backward()
-        
+
+

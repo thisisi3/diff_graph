@@ -3,6 +3,10 @@ from . import utils
 from .core import Tensor
 import numpy as np
 
+# Operator has three main attributes: 
+#     the inputs which are other operators 
+#     the computation itself 
+#     the resulting output tensor
 class Operator:
     def __init__(self, name = 'Op'):
         # inputs is a list of Operators while output is just one Tensor

@@ -46,6 +46,7 @@ def conv_slide_index(img_shape, filter_size, stride = 1, padding = 0):
     fh_half = filter_size[0] // 2
     fw_half = filter_size[1] // 2
 
+    # real corners of the image after padding
     up_left   = (0 - padding[0], 0 - padding[1])
     low_right = (h - 1 + padding[0], w - 1 + padding[1])
     up_left   = (up_left[0] + fh_half, up_left[1] + fw_half)
@@ -64,6 +65,3 @@ def conv_slide_index(img_shape, filter_size, stride = 1, padding = 0):
             slide_index((0, 0), (filter_size[0] - 1, filter_size[1] - 1))
                         
                         
-            
-                        
-    
