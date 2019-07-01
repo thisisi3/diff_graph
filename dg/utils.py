@@ -12,7 +12,7 @@ def check_shape_match(x, y):
     else:
         raise core.ShapeNotMatchError('Shape does not match: {}, {}'.format(x.data().shape,\
                                                                             y.data().shape))
-def expand_shape(shape, dim):
+def expand_to_tuple(shape, dim):
     if type(shape) is int:
         return (shape,) * dim
     else:

@@ -11,14 +11,14 @@ def check_image_shape(img):
 # all parameters are scalers
 def calc_out_size(in_size, filter_size, stride, padding):
     assert (in_size + padding * 2 - filter_size) % stride == 0
-    return (in_size + padding * 2 - filter_size) / stride + 1
+    return (in_size + padding * 2 - filter_size) // stride + 1
 
 # to-do
 class IndexSlider:
     def __init__(self, up_left, low_right, stride):
         self.up_left = up_left
         self.low_right = low_right
-        self.stride = utils.expand_shape(stride, 2)
+        self.stride = utils.expand_to_tuple(stride, 2)
         self.cur_idx = [up_left[0], up_left[1]]
 
     def __iter__(self):
@@ -48,10 +48,13 @@ def slide_index(up_left, low_right, stride = 1):
 #   stride       = (stride along height, stride along width)
 #   padding      = (padding along height, padding along width)
 # sliding is from left to right, top to bottom
-# filter_size only allow add numbers
+# filter_size only allow odd numbers
 # filter_size, stride along with img_size should make sense
-#
+# it returns:
+#   centers of sliding window on image
+#   up_left and low_right of sliding window on image
 def conv_slide_index(img_shape, filter_size, stride = 1, padding = 0):
+    img_shape = img_shape[:2]
     if type(filter_size) is int:
         filter_size = (filter_size, filter_size)
     if type(stride) is int:
@@ -86,9 +89,7 @@ def conv_slide_index(img_shape, filter_size, stride = 1, padding = 0):
         img_win_end   = (center[0] + fh_half, center[1] + fw_half)
         yield \
             center, \
-            slide_index(img_win_start, img_win_end), \
-            slide_index((0, 0), (filter_size[0] - 1, filter_size[1] - 1))
-                        
+            (img_win_start, img_win_end)
 
 # it makes a conv filter and returns an OperatorNode
 def init_conv_filter_tsr(num_filter, height, width, chanel):
@@ -133,7 +134,7 @@ def crop_image(img, up_left, low_right):
     return img[up_left[0]:low_right[0] + 1, up_left[1]:low_right[1] + 1]
 
 # pad a 2D array, only pad on 1st and 2nd axis
-def pad_image(img, padding):
+def pad_image(img, padding, padding_value = 0):
     if type(padding) is int:
         padding = (padding, padding)
     padding_height, padding_width = padding
@@ -142,23 +143,40 @@ def pad_image(img, padding):
                                (padding_width , padding_width),
                                (0,0)],
                   mode = 'constant',
-                  constant_values = 0)
+                  constant_values = padding_value)
 
+
+# this applies all filters on the image and produce the activation map
+# filt here is sort of batched, i.e. it has shape (N, height, width, chanel)
+# where N is the number of filters
+# return a numpy tensor that has shape (height, width, N) where N is also
+# chanel of the output image
+def conv_image(img, filt, stride = 1, padding = 0):
+    assert filt.ndim == 4
+    assert img.ndim == 3
+    stride = utils.expand_to_tuple(stride, 2)
+    padding = utils.expand_to_tuple(padding, 2)
+    do_padding = any(padding)
+    if do_padding:
+        img_padded = pad_image(img, padding)
+    else:
+        img_padded = img
+
+    num_filt = filt.shape[0]
+    out_img = init_conv_out_tsr(1, img_padded.shape, filt[0].shape,
+                                num_filt, stride, padding = 0)[0]
+    out_idx = list(slide_index((0,0), (out_img.shape[0] - 1, out_img.shape[1] - 1)))
+    idx = 0
+    for center, corners in \
+        conv_slide_index(img_padded.shape, filt[0].shape, stride, padding = 0):
+        cur_out_idx = out_idx[idx]
+        croped_area = crop_image(img_padded, corners[0], corners[1])
+        mat_prod = croped_area * filt
+        inner = np.sum(mat_prod, axis = tuple(range(1, 4)))
+        out_img[cur_out_idx] = inner
+        idx += 1
+    return out_img
     
-    
-# this applies one filter on one image and produce one output activation map
-# img and filt are numpy tensors
-# return a numpy tensor
-def conv_forward_one(img, filt, stride = 1, padding = 0):
-    out_img = init_conv_out_tsr(1, img.shape, filt.shape, 1, stride, padding)[0]
-    out_idx = list(slide_index((0, 0), (img[0] - 1, img[1] - 1)))
-    i = 0
-    for center, coor_img, coor_filt in conv_slide_index(img.shape,
-                                                        filt.shape,
-                                                        stride,
-                                                        padding):
-        # to-do
-        img_val = None
 
 
 def conv_forward(img_tsr, filt_tsr, out_tsr):
