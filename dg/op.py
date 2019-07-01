@@ -243,6 +243,8 @@ class EntryOp(Operator):
     def backward(self):
         pass
 
+# this combines Operator with Node so that graph utilities can be used
+# and extracting a subgraph won't affect the original structure of operators
 class OperatorNode(graph.Node):
     def __init__(self, op, name = 'OperatorNode'):
         super(OperatorNode, self).__init__(name = name)
@@ -277,6 +279,11 @@ class OperatorNode(graph.Node):
 
     def clear_grad(self):
         self.op.clear_grad()
+        
+# the following utilities are main methods to construct the graph, basically it
+# maintains two structures, one is the underlying operator net, the other is
+# the top graph net. The operator net is the main components of the differentiable
+# graph while the graph net helps the usage of graph related manipulations
 
 # input two OperatorNode and output a matrix multiplication OperatorNode
 def mat_mul(a_node, b_node, name = 'MatMul'):
@@ -287,6 +294,7 @@ def mat_mul(a_node, b_node, name = 'MatMul'):
     b_node.next.append(node)
     return node
 
+# matrix addition
 def mat_add(a_node, b_node, name = 'MatAdd'):
     op = MatAddOp(a_node.op, b_node.op, name = name)
     node = OperatorNode(name = name, op = op)
@@ -295,6 +303,7 @@ def mat_add(a_node, b_node, name = 'MatAdd'):
     b_node.next.append(node)
     return node
 
+# L2 norm of a tensor
 def l2(in_node, name = 'l2'):
     op = L2Op(in_node.op, name = name)
     node = OperatorNode(name = name, op = op)
@@ -309,6 +318,7 @@ def identity(np_tsr, name = 'data_entry'):
     node = OperatorNode(name = name, op = op)
     return node
 
+# sigmoid activation
 def sigmoid(in_node, name = 'sigmoid'):
     op = SigmoidOp(in_node.op, name = name)
     node = OperatorNode(name = name, op = op)
@@ -316,6 +326,7 @@ def sigmoid(in_node, name = 'sigmoid'):
     in_node.next.append(node)
     return node
 
+# relu activation
 def relu(in_node, name = 'relu'):
     op = ReluOp(in_node.op, name = name)
     node = OperatorNode(name = name, op = op)
@@ -333,6 +344,7 @@ def mse(a_node, b_node, name = 'MSE'):
     return node
 
 # cross entropy loss
+# here in_node is logits which are not yet activated by non-linearity
 def softmax_cross(in_node, ylabel, name = 'soft_cross'):
     op = SoftmaxCrossEntropyOp(in_node.op, ylabel.op, name = name)
     node = OperatorNode(name = name, op = op)

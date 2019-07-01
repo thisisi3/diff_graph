@@ -12,7 +12,12 @@ def check_shape_match(x, y):
     else:
         raise core.ShapeNotMatchError('Shape does not match: {}, {}'.format(x.data().shape,\
                                                                             y.data().shape))
-
+def expand_shape(shape, dim):
+    if type(shape) is int:
+        return (shape,) * dim
+    else:
+        return tuple(shape)
+    
 def check_shape_exact_match(x, y):
     if x.data().shape != y.data().shape:
         raise core.ShapeNotMatchError('Not exact match: {}, {}'.format(x.data().shape,\

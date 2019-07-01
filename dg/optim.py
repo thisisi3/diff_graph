@@ -2,6 +2,8 @@ from . import graph
 from . import core
 DEFAULT_LR = 0.1
 
+# optimizers encapsulate strategies of updating weights
+# it involves learning rate, updating rules and etc
 class Optimizer:
     def __init__(self, loss, trainable = [], lr = DEFAULT_LR):
         pass
@@ -12,6 +14,7 @@ class Optimizer:
     def update_trainable(self):
         pass
 
+# stochastic gradient descent 
 class SGD:
     def __init__(self, loss, trainable = [], lr = DEFAULT_LR):
         self.loss = loss
@@ -26,3 +29,5 @@ class SGD:
     def update_trainable(self):
         for w in self.trainable:
             w.set_data(w.data() - self.lr * w.grad())
+
+
