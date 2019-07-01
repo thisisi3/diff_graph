@@ -53,12 +53,21 @@ def test_conv_img():
     print('Next test stride = (1,2), padding = 1')
     conv = dg.cnn.conv_image(img, filt, stride = (1,2), padding = 1)
     print('conv.shape:', conv.shape)
+
+def test_conv_forward():
+    print_sep()
+    print('Test conv forward pass')
+    img_op = dg.identity(np.random.randn(5,7,7,3))
+    x = dg.cnn.ConvOp(img_op, 3, 6, stride = 2)
+    print(x.img_op.data().shape)
+    print(x.output.data.shape)
+
     
 if __name__ == '__main__':
     test_check()
     test_conv_slide()
     test_conv_img()
-
+    test_conv_forward()
     
     print_sep()
     

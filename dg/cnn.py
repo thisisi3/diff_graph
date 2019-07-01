@@ -147,10 +147,10 @@ def pad_image(img, padding, padding_value = 0):
 
 
 # this applies all filters on the image and produce the activation map
-# filt here is sort of batched, i.e. it has shape (N, height, width, chanel)
-# where N is the number of filters
-# return a numpy tensor that has shape (height, width, N) where N is also
-# chanel of the output image
+# filt has shape (N, height, width, chanel)
+# where N is the number of filters.
+# it returns a numpy tensor that has shape (height, width, N) where N 
+# is also chanel of the output image
 def conv_image(img, filt, stride = 1, padding = 0):
     assert filt.ndim == 4
     assert img.ndim == 3
@@ -171,29 +171,26 @@ def conv_image(img, filt, stride = 1, padding = 0):
         conv_slide_index(img_padded.shape, filt[0].shape, stride, padding = 0):
         cur_out_idx = out_idx[idx]
         croped_area = crop_image(img_padded, corners[0], corners[1])
-        mat_prod = croped_area * filt
-        inner = np.sum(mat_prod, axis = tuple(range(1, 4)))
+        inner = np.sum(croped_area * filt, axis = tuple(range(1, 4)))
         out_img[cur_out_idx] = inner
         idx += 1
     return out_img
     
 
+def conv_image_batch(img_bat, filt, stride = 1, padding = 0):
+    out = [conv_image(img, filt, stride, padding) for img in img_bat]
+    return np.array(out)
 
-def conv_forward(img_tsr, filt_tsr, out_tsr):
-    for img_idx, img in enumerate(img_tsr):
-        out_img = out_tsr[img_idx]
-        for filt_idx, filt in enumerate(fil_tsr):
-            # to-do
-            pass
 
 # img is batch-aware
 # img has shape (batch_size, height, width, chanel)
-class ConvOp:
+# filter_size has shape(height, width)
+# num_filter is an interger
+class ConvOp(op.Operator):
     def __init__(self, img_op, filter_size, num_filter,
                  stride = 1, padding = 0, name = 'ConvOp'):
         super(ConvOp, self).__init__(name = name)
-        if type(filter_size) is int:
-            filter_size = (filter_size, filter_size)
+        filter_size = utils.expand_to_tuple(filter_size, 2)
         self.img_op = img_op
         self.filter_size = filter_size
         self.filter_height = filter_size[0]
@@ -204,12 +201,12 @@ class ConvOp:
         self.inputs = [img_op]
         self.in_chanel = img_op.data().shape[-1]
         self.batch_size = img_op.data().shape[0]
-        self.conv_filter = make_conv_filter(
+        self.conv_filter = op.identity(init_conv_filter_tsr(
             num_filter,
             self.filter_height,
             self.filter_width,
             self.in_chanel
-        )
+        ))
         self.output = Tensor(init_conv_out_tsr(
             self.batch_size,
             img_op.data().shape[1:],
@@ -222,7 +219,10 @@ class ConvOp:
         
 
     def forward(self):
-        
-        pass
+        self.output.data = conv_image_batch(self.img_op.data(),
+                                            self.conv_filter.data(),
+                                            self.stride,
+                                            self.padding)
+
 
     
