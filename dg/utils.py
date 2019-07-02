@@ -44,4 +44,3 @@ def batch_soft_cross(x, label):
     soft_val = np.sum(soft_tsr * label, sum_axis)
     return -np.log(soft_val)
 
-    
