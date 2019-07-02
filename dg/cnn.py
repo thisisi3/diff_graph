@@ -29,12 +29,15 @@ def pad_image(img, padding, padding_value = 0):
                   mode = 'constant',
                   constant_values = padding_value)
 
+# change a rectangular area in the image
 def change_image_area(img, up_left, low_right, val):
     img[up_left[0]:low_right[0] + 1, up_left[1]:low_right[1] + 1]  = val
 
+# add some values to a rectangular area in the image
 def add_to_image_area(img, up_left, low_right, val):
     img[up_left[0]:low_right[0] + 1, up_left[1]:low_right[1] + 1] += val
 
+# reverse of padding
 def unpad_image(img, padding = 0):
     padding = utils.expand_to_tuple(padding, 2)
     is_padded = any(np.array(padding) != 0)
@@ -45,18 +48,6 @@ def unpad_image(img, padding = 0):
                       (padding[0],padding[1]),
                       (img_height - padding[0] - 1, img_width - padding[1] - 1))
 
-# to-do
-class IndexSlider:
-    def __init__(self, up_left, low_right, stride):
-        self.up_left = up_left
-        self.low_right = low_right
-        self.stride = utils.expand_to_tuple(stride, 2)
-        self.cur_idx = [up_left[0], up_left[1]]
-
-    def __iter__(self):
-        return self
-    def next(self):
-        pass
 
 # it generates indices from up_left to low_right in a 2D map,
 # with stride aware
@@ -68,6 +59,7 @@ def slide_index(up_left, low_right, stride = 1):
         for j in range(up_left[1], low_right[1] + 1, stride[1]):
             yield (i,j)
 
+# from up left corner to lower right corner of a 2D map
 def slide_matrix_index(size, stride = 1):
     size = utils.expand_to_tuple(size, 2)
     return slide_index((0,0), (size[0] - 1, size[1] - 1), stride)
@@ -242,49 +234,76 @@ class ConvOp(op.Operator):
                                             self.stride,
                                             self.padding)
 
+    # backward pass
     def backward(self):
         for i in range(self.batch_size):
+            print('*' * 80)
+            print('backward on image {}'.format(i))
             self.backward_one_image(i)
 
-    # backward pass over one 
+    # backward pass over one image in the batch.
+    # the main purpose of backward is to calculate gradient of
+    # all input tensors, here ConvOp has three gradients need to
+    # be caculated:
+    #     input image with shape (batch_size, height, width, chanel)
+    #     conv filter with shape (num_filt, height, width, chanel)
+    #     bias with shape (num_filt,)
+    # we can do backward pass for each image one by one, but need to
+    # be careful of the shared weights. the whole idea is to linearly split the
+    # batched convolution operation into smaller steps and accumulate gradients
+    # in each step. we go throught each batch, and for each batch we go
+    # through each sliding window and in each sliding window it's just
+    # matrix-element-wise multiplication and matrix addition.
+    # again, know the shared values and sum the gradients on them 
     def backward_one_image(self, i):
-        img_data,  img_grad  = self.img_op.data(), self.img_op.grad()
-        bias_data, bias_grad = self.bias.data(), self.bias.grad()
-        filt_data, filt_grad = self.conv_filter.data(), self.conv_filter.grad()
-        out_grad = self.output.grad
-
         stride, padding = self.stride, self.padding
-        out_idx = list(slide_matrix_index(out_grad.shape[1:3]))
 
-        cur_img_grad_padded = pad_image(np.zeros(img_data.shape[1:]), padding, 0)
-        cur_img_data_padded = pad_image(img_data[i], padding)
+        cur_img_data = self.img_op.output.data[i]
+        filt_data =  self.conv_filter.output.data
+        filt_size = filt_data.shape[1:3]
+        
+        # get and pad the i-th image
+        # cur_img_grad_padded is the place for gradient w.r.t img[i] to accumulate
+        # cur_img_data_padded is the padded input image data
+        # padding here is to make calc easier
+        cur_img_grad_padded = pad_image(np.zeros(cur_img_data.shape), padding, 0)
+        cur_img_data_padded = pad_image(cur_img_data, padding)
+        cur_out_grad = self.output.grad[i]
+        out_idx = list(slide_matrix_index(cur_out_grad.shape))
+        # index of output map
         idx = 0
         for center, corners in \
             conv_slide_index(cur_img_grad_padded.shape,
-                             filt_data.shape[1:3],
+                             filt_size,
                              stride,
                              padding = 0):
             cur_out_idx  = out_idx[idx]
             
-            cur_out_grad = out_grad[i][cur_out_idx]
+            idxed_out_grad = cur_out_grad[cur_out_idx]
             reshape_shape = np.array(filt_data.shape)
             reshape_shape[1:] = 1
-            cur_out_grad = cur_out_grad.reshape(reshape_shape)
-            grad_wrt_crop = cur_out_grad * filt_data
+            idxed_out_grad = idxed_out_grad.reshape(reshape_shape)
+            grad_wrt_crop = idxed_out_grad * filt_data
             add_to_image_area(cur_img_grad_padded,
                               corners[0],
                               corners[1],
                               np.sum(grad_wrt_crop, axis = 0))
 
             cropped_area = crop_image(cur_img_data_padded, corners[0], corners[1])
-            grad_wrt_filt = cur_out_grad * cropped_area
+            grad_wrt_filt = idxed_out_grad * cropped_area
             
+            # accumulate conv_filter gradients
             self.conv_filter.output.grad += grad_wrt_filt
-            self.bias.output.grad += cur_out_grad.flatten()
+            # print('{}-th sum of grad_wrt_filt: {}'.format(i, np.sum(grad_wrt_filt)))
+            # accumulate conv_bias gradients
+            self.bias.output.grad += idxed_out_grad.flatten()
+            # print('{}-th sum of grad_wrt_bias: {}'.format(i, idxed_out_grad.flatten()))
             
             idx += 1
         cur_img_grad_unpadded = unpad_image(cur_img_grad_padded, padding)
-        self.img_op.output.grad += cur_img_grad_unpadded
+        # accumulate image gradients for i-th image
+        self.img_op.output.grad[i] += cur_img_grad_unpadded
+        print('{}-th sum of cur_img_grad_unpadded: {}'.format(i, np.sum(cur_img_grad_unpadded)))
 
 
     def params(self):

@@ -78,8 +78,29 @@ def test_backward():
     print_sep()
     print('Test conv backward pass')
     conv = construct_conv()
+    print('constructed conv layer!')
+    print('conv_filter.data')
+    print(conv.op.conv_filter.data())
+    print('conv_filter.grad')
+    print(conv.op.conv_filter.grad())
+    
+    print('doing a forward pass...')
     conv.forward()
+
+    print('setting outgrad one')
+    conv.set_grad_one()
+    print('doing backward')
     conv.backward()
+    return
+    print('conv_filter.data')
+    print(conv.op.conv_filter.data())
+    print('conv_filter.grad')
+    print(conv.op.conv_filter.grad())
+    print('conv_bias.data')
+    print(conv.op.bias.data())
+    print('conv_bias.grad')
+    print(conv.op.bias.grad())
+
     return True
     
 if __name__ == '__main__':
