@@ -31,8 +31,15 @@ class Operator:
         if self.output:
             self.output.grad = np_tsr
 
+    def set_grad_randn(self, m = 0., stdev = 1.0):
+        if self.output:
+            self.output.grad = np.random.randn(*self.data().shape) * stdev + m
+
     def set_grad_one(self):
         self.output.set_grad_one()
+
+    def add_to_grad(self, np_tsr):
+        self.output.grad += np_tsr
 
     def set_data(self, np_tsr):
         if self.output:
@@ -274,8 +281,14 @@ class OperatorNode(graph.Node):
     def set_grad(self, np_tsr):
         self.op.set_grad(np_tsr)
 
+    def set_grad_randn(self, m = 0., stdev = 1.0):
+        self.op.set_grad_randn(m, stdev)
+
     def set_grad_one(self):
         self.op.set_grad_one()
+
+    def add_to_grad(self, np_tsr):
+        self.op.add_to_grad(np_tsr)
 
     def clear_grad(self):
         self.op.clear_grad()

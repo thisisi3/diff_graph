@@ -3,6 +3,12 @@ from . import op
 from .core import Tensor
 import numpy as np
 
+def print_2d(v):
+    lines = []
+    for x in v:
+        lines.append('\t'.join([str(round(i, 2)) for i in x]))
+    print('\n'.join(lines))
+
 # img must have shape (batch_size, height, width, chanel)
 def check_image_shape(img):
     assert img.ndim == 4
@@ -301,9 +307,11 @@ class ConvOp(op.Operator):
             
             idx += 1
         cur_img_grad_unpadded = unpad_image(cur_img_grad_padded, padding)
+        
         # accumulate image gradients for i-th image
         self.img_op.output.grad[i] += cur_img_grad_unpadded
-        print('{}-th sum of cur_img_grad_unpadded: {}'.format(i, np.sum(cur_img_grad_unpadded)))
+        print('{}-th sum of cur_img_grad_unpadded: {}'\
+              .format(i, np.sum(cur_img_grad_unpadded)))
 
 
     def params(self):
@@ -324,6 +332,151 @@ class ConvOp(op.Operator):
 
 def conv(img_node, filter_size, num_filter, stride = 1, padding = 0, name = 'conv'):
     opr = ConvOp(img_node.op, filter_size, num_filter, stride, padding, name)
+    node = op.OperatorNode(name = name, op = opr)
+    node.prev.append(img_node)
+    img_node.next.append(node)
+    return node
+    
+    
+class MaxPoolOp(op.Operator):
+    def __init__(self, img_op, filter_size, stride = 1, padding = 0, name = 'MaxPoolOp'):
+        super(MaxPoolOp, self).__init__(name = name)
+        self.filter_size = utils.expand_to_tuple(filter_size, 2)
+        self.stride = utils.expand_to_tuple(stride, 2)
+        self.padding = utils.expand_to_tuple(padding, 2)
+
+        self.img_op = img_op
+        self.batch_size = self.img_op.data().shape[0]
+        self.in_chanel = self.img_op.data().shape[-1]
+
+        img_height, img_width = self.img_op.data().shape[1:3]
+        self.output = Tensor(np.random.randn(
+            self.batch_size,
+            calc_out_size(img_height, self.filter_size[0], self.stride[0], self.padding[0]),
+            calc_out_size(img_width,  self.filter_size[1], self.stride[1], self.padding[1]),
+            self.in_chanel
+        ))
+        
+    def forward(self):
+        img_data = self.img_op.data()
+        img_height, img_width = img_data.shape[1:3]
+        filt_size, stride, padding = self.filter_size, self.stride, self.padding
+
+        img_padded = np.pad(img_data,
+                            pad_width = ((0,0),
+                                         (padding[0],padding[0]),
+                                         (padding[1],padding[1]),
+                                         (0,0)),
+                            mode = 'constant',
+                            constant_values = 0)
+
+        out_idx = list(slide_matrix_index(self.output.data.shape[1:3]))
+        idx = 0
+        for center, corners in \
+            conv_slide_index(img_padded.shape[1:3],
+                             filt_size,
+                             stride,
+                             padding = 0):
+            cur_out_idx = out_idx[idx]
+            cropped = img_padded[:, corners[0][0]:corners[1][0]+1,
+                                 corners[0][1]:corners[1][1]+1, :]
+            max_val = np.max(cropped, axis = (1,2))
+            self.output.data[:,cur_out_idx[0], cur_out_idx[1], :] \
+                = max_val
+            idx += 1
+
+    def backward(self):
+        img_data = self.img_op.data()
+        img_height, img_width = img_data.shape[1:3]
+        filt_size, stride, padding = self.filter_size, self.stride, self.padding
+        img_grad_padded = np.pad(np.zeros(img_data.shape),
+                                 pad_width = ((0,0),
+                                              (padding[0],padding[0]),
+                                              (padding[1],padding[1]),
+                                              (0,0)),
+                                 mode = 'constant',
+                                 constant_values = 0)
+        img_data_padded = np.pad(img_data,
+                                 pad_width = ((0,0),
+                                              (padding[0],padding[0]),
+                                              (padding[1],padding[1]),
+                                              (0,0)),
+                                 mode = 'constant',
+                                 constant_values = 0)
+        print('img_op.grad before everything')
+        print_2d(self.img_op.grad()[0,:,:,0])
+        print('focus on img_data_padded, 0-th image and 0 chanel:')
+        print_2d(img_data_padded[0,:,:,0])
+        
+        print('img_data.shape:', img_data.shape)
+        print('img_grad_padded.shape:', img_grad_padded.shape)
+        print('img_grad_padded.sum:', np.sum(img_grad_padded))
+
+        print('img_data_padded.shape:', img_data_padded.shape)
+
+        out_idx = list(slide_matrix_index(self.output.data.shape[1:3]))
+        print('len(oud_idx):', len(out_idx))
+        idx = 0
+        for center, corners in \
+            conv_slide_index(img_grad_padded.shape[1:3],
+                             filt_size,
+                             stride,
+                             padding = 0):
+            print('*' * 80)
+            print('cur_idx:', idx)
+            cur_out_idx = out_idx[idx]
+            out_grad = self.output.grad[:, cur_out_idx[0], cur_out_idx[1], :]
+            print('at grad index:', cur_out_idx)
+            print('out_grad.shape:', out_grad.shape)
+            print('focus on out_grad of 0-th img:')
+            print(out_grad[0])
+            img_data_cropped = img_data_padded[:, corners[0][0]:corners[1][0]+1,
+                                               corners[0][1]:corners[1][1]+1, :]
+            print('img_data_cropped.shape:', img_data_cropped.shape)
+            print('cropped image, focus on 0-th img and 0 chanel:')
+            print_2d(img_data_cropped[0,:,:,0])
+            img_grad_cropped = np.zeros(img_data_cropped.shape)
+            print('img_grad_cropped.shape:', img_grad_cropped.shape)
+            print('img_grad_cropped.sum:', np.sum(img_grad_cropped))
+            for img_i in range(img_data_cropped.shape[0]):
+                for ch_i in range(img_data_cropped.shape[2]):
+                    local_win = img_data_cropped[img_i,:,:,ch_i]
+                    argmax = np.argmax(local_win)
+                    argmax = np.unravel_index(argmax, local_win.shape)
+                    img_grad_cropped[img_i, argmax[0], argmax[1], ch_i] \
+                        += out_grad[img_i, ch_i]
+            print('img_grad_cropped, focus on 0-th img 0 chanel:')
+            print(img_grad_cropped[0,:,:,0])
+            img_grad_padded[:,corners[0][0]:corners[1][0]+1,
+                            corners[0][1]:corners[1][1]+1, :] += img_grad_cropped
+            print('the tmp img_grad_padded.shape:', img_grad_padded.shape)
+            print('the tmp img_grad_padded, focus on 0th img 0th chanel:')
+            print_2d(img_grad_padded[0,:,:,0])
+
+            idx += 1
+        # only add the data from the original image area
+        self.img_op.output.grad \
+            += img_grad_padded[:, padding[0]:img_height+padding[0],
+                               padding[1]:img_width+padding[1], :]
+        print('img_op.grad, focus on 0th img and 0 chanel')
+        print_2d(self.img_op.output.grad[0,:,:,0])
+        print('Finished backward')
+        print('idx:', idx)
+            
+
+    def to_str(self):
+        return '\n'.join([
+            'name: ' + self.name,
+            'filter_size: ' + str(self.filter_size),
+            'stride: ' + str(self.stride),
+            'padding: ' + str(self.padding),
+            'img.shape: ' + str(self.img_op.data().shape),
+            'out.shape: ' + str(self.output.data.shape)
+        ])
+
+
+def max_pool(img_node, filter_size, stride = 1, padding = 0, name = 'max_pool'):
+    opr = MaxPoolOp(img_node.op, filter_size, stride, padding, name)
     node = op.OperatorNode(name = name, op = opr)
     node.prev.append(img_node)
     img_node.next.append(node)

@@ -102,6 +102,30 @@ def test_backward():
     print(conv.op.bias.grad())
 
     return True
+
+
+def construct_max_pool_layer():
+    img = dg.identity(np.random.randn(5,7,7,3))
+    conv = dg.cnn.max_pool(img, 3, stride = (2,1), padding = (1,2))
+    print('Info about the conv layer:')
+    print(conv.op.to_str())
+    return conv
+
+def test_max_pool():
+    print_sep()
+    print('Test Max Pool Operator')
+    conv = construct_max_pool_layer()
+    print('constructed conv layer!')
+
+    print('doing forward...')
+    conv.forward()
+
+    print_sep()
+    print('doing backward...')
+    conv.set_grad_randn()
+    conv.backward()
+    
+    
     
 if __name__ == '__main__':
     test_check()
@@ -110,6 +134,7 @@ if __name__ == '__main__':
     test_conv_forward()
     
     test_backward()
+    test_max_pool()
     
     print_sep()
     

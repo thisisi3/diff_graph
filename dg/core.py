@@ -31,6 +31,7 @@ class Tensor:
     def set_grad_one(self):
         self.grad = np.ones(self.data.shape, dtype = DEFAULT_DTYPE)
 
+
 # Given a root whose gradients need to be backpropagated through the graph,
 # iterate over all the nodes along the forward pass.
 # Node is a node from the differentiable graph.
