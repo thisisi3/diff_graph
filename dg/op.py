@@ -24,15 +24,15 @@ class Operator:
         raise NotImplementedError('Please implement compute_jabobian()')
 
     def clear_grad(self):
-        if self.output:
+        if self.output is not None:
             self.output.clear_grad()
 
     def set_grad(self, np_tsr):
-        if self.output:
+        if self.output is not None:
             self.output.grad = np_tsr
 
     def set_grad_randn(self, m = 0., stdev = 1.0):
-        if self.output:
+        if self.output is not None:
             self.output.grad = np.random.randn(*self.data().shape) * stdev + m
 
     def set_grad_one(self):
@@ -42,21 +42,24 @@ class Operator:
         self.output.grad += np_tsr
 
     def set_data(self, np_tsr):
-        if self.output:
+        if self.output is not None:
             self.output.data = np_tsr
 
     def data(self):
-        if self.output:
+        if self.output is not None:
             return self.output.data
         return None
 
     def grad(self):
-        if self.output:
+        if self.output is not None:
             return self.output.grad
         return None
 
     def tensor(self):
         return self.output
+
+    def shape(self):
+        return self.data().shape
 
 
 # assume at least one of the two ops is batch-aware
@@ -126,7 +129,7 @@ class MatAddOp(Operator):
         else:
             return np.sum(grad, axis = 0)
 
-
+# mean square error loss
 class MSEOp(Operator):
     def __init__(self, y_op, ylabel_op, name = 'MSEOp'):
         super(MSEOp, self).__init__(name = name)
@@ -151,7 +154,7 @@ class MSEOp(Operator):
             += (self.y_op.data() - self.ylabel_op.data()) * 2 / sz * out_grad
         self.ylabel_op.output.grad \
             += -self.y_op.output.grad
-
+# L2 norm
 class L2Op(Operator):
     def __init__(self, in_op, reg = 1, name = 'L2_Norm'):
         super(L2Op, self).__init__(name)
@@ -171,7 +174,7 @@ class L2Op(Operator):
         self.in_op.output.grad += self.in_op.data() * 2 / self.in_op.data().size \
                                   * out_grad * self.reg
 
-
+# sigmoid operation
 class SigmoidOp(Operator):
     def __init__(self, in_op, name = 'SigmoidOp'):
         super(SigmoidOp, self).__init__(name = name)
@@ -185,8 +188,7 @@ class SigmoidOp(Operator):
     def backward(self):
         self.in_op.output.grad += self.grad() * (1 - self.data()) * self.data()
         
-
-
+# relu operator
 class ReluOp(Operator):
     def __init__(self, in_op, name = 'ReluOp'):
         super(ReluOp, self).__init__(name = name)
@@ -200,6 +202,7 @@ class ReluOp(Operator):
     def backward(self):
         self.in_op.output.grad += self.data().astype(np.bool).astype(np.int) * self.grad()
 
+# softmax operator
 class SoftmaxOp(Operator):
     def __init__(self, in_op, name = 'SoftmaxOp'):
         super(SoftmaxOp, self).__init__(name = name)
@@ -213,6 +216,8 @@ class SoftmaxOp(Operator):
     def backward(self):
         raise NotImplementedError('Backward() in SoftmaxOp is not implemented')
 
+# softmax with cross entropy, softmax and cross entropy are calculated together
+# to-do: split softmax and cross entropy
 class SoftmaxCrossEntropyOp(Operator):
     def __init__(self, in_op, ylabel, name = 'SoftmaxCrossEntropyOp'):
         super(SoftmaxCrossEntropyOp, self).__init__(name = name)
@@ -235,6 +240,40 @@ class SoftmaxCrossEntropyOp(Operator):
             self.in_op.data(), self.ylabel.data()
         )) / len(self.in_op.data())
         return cross
+
+# reshape operators
+class ReshapeOp(Operator):
+
+    def __init__(self, in_op, out_shape, name = 'ReshapeOp'):
+        super(ReshapeOp, self).__init__(name = name)
+        self.in_op = in_op
+        self.in_shape = in_op.shape()
+        self.inputs = [in_op]
+        self.ou_shape = out_shape
+        self.output = Tensor(in_op.data().reshape(out_shape))
+
+    def forward(self):
+        self.output.data = self.in_op.data().reshape(self.ou_shape)
+
+    def backward(self):
+        self.in_op.add_to_grad(self.grad().reshape(self.in_op.shape()))
+
+# make a tensor flat, basically reshape can replace this
+class FlattenOp(Operator):
+
+    def __init__(self, in_op, name = 'Flatten'):
+        super(FlattenOp, self).__init__(name)
+        self.in_op = in_op
+        self.inputs = [in_op]
+        self.in_shape  = self.in_op.data().shape
+        self.re_shape = (self.in_shape[0], utils.prod(self.in_shape[1:]))  
+        self.output = Tensor(in_op.data().reshape(self.re_shape))
+
+    def forward(self):
+        self.output.data = self.in_op.data().reshape(self.re_shape)
+
+    def backward(self):
+        self.in_op.add_to_grad(self.grad().reshape(self.in_op.data().shape))
         
 
 # data entry operator
@@ -292,6 +331,9 @@ class OperatorNode(graph.Node):
 
     def clear_grad(self):
         self.op.clear_grad()
+
+    def shape(self):
+        return self.op.shape()
         
 # the following utilities are main methods to construct the graph, basically it
 # maintains two structures, one is the underlying operator net, the other is
@@ -365,4 +407,19 @@ def softmax_cross(in_node, ylabel, name = 'soft_cross'):
     in_node.next.append(node)
     ylabel.next.append(node)
     return node
-    
+
+# flatten
+def flatten(in_node, name = 'flatten'):
+    op = FlattenOp(in_node.op, name = name)
+    node = OperatorNode(name = name, op = op)
+    node.prev.append(in_node)
+    in_node.next.append(node)
+    return node
+
+# reshape
+def reshape(in_node, out_shape, name = 'reshape'):
+    op = ReshapeOp(in_node.op, out_shape, name = name)
+    node = OperatorNode(name = name, op = op)
+    node.prev.append(in_node)
+    in_node.next.append(node)
+    return node
